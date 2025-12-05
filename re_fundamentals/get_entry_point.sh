@@ -1,19 +1,26 @@
 #!/bin/bash
+source ./messages.sh
 
-file_name="$1"
-[[ -z "$file_name" || ! -f "$file_name" ]] && { echo "Error: File '$file_name' invalid or not specified."; exit 1; }
-file "$file_name" | grep -q ELF || { echo "Error: '$file_name' is not an ELF file."; exit 1; }
+# validate one ELF file argument
+if [ $# -ne 1 ] || [ ! -f "$1" ] || ! file "$1" | grep -q ELF; then
+  echo "Usage: $0 <elf_file> (must be an ELF file)"
+  exit 1
+fi
 
-readelf -h "$file_name" 2>/dev/null | awk -v fname="$file_name" '
-/Magic:/ {for(i=2;i<=NF;i++) magic=(magic $i " ")}
-/Class:/ {class=$2}
-/Data:/ {sub(/^Data: /,""); byte_order=$0}
-/Entry point address:/ {entry=$4}
-END {
-  print "ELF Header Information for" fname ":"
-  print "----------------------------------------"
-  print "Magic Number:", magic
-  print "Class:", class
-  print "Byte Order:", byte_order
-  print "Entry Point Address:", entry
-}'
+# extract fields with one awk pipeline
+IFS=$'\n' read -r magic_number class byte_order entry_point_address < <(
+  readelf -h "$1" | awk -F: '
+    /Magic:/ {gsub(/^[ \t]+/,"",$2); print $2}
+    /Class:/ {gsub(/^[ \t]+/,"",$2); print $2}
+    /Data:/ {gsub(/^[ \t]+/,"",$2); print $2}
+    /Entry point address:/ {gsub(/^[ \t]+/,"",$2); print $2}
+  '
+)
+
+export file_name="$1"
+export magic_number
+export class
+export byte_order
+export entry_point_address
+
+display_elf_header_info
